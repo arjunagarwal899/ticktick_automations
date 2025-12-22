@@ -143,6 +143,11 @@ class TaskDuplicator:
                 stats["checked"] += 1
                 task_id = task.get("id")
                 
+                # Skip tasks without valid ID
+                if not task_id:
+                    self.logger.warning(f"Skipping task without ID: {task.get('title', 'Unknown')}")
+                    continue
+                
                 # Skip if already processed
                 if task_id in self.processed_task_ids:
                     continue
