@@ -65,7 +65,7 @@ class TickTickClient:
         if not code:
             raise TickTickAPIError(
                 "OAuth code required. Please complete the OAuth flow manually:\n"
-                "1. Visit: https://ticktick.com/oauth/authorize?client_id={}&scope=tasks:read tasks:write&redirect_uri={}\n"
+                f"1. Visit: https://ticktick.com/oauth/authorize?client_id={self.client_id}&scope=tasks:read tasks:write&redirect_uri={{redirect_uri}}\n"
                 "2. Get the authorization code\n"
                 "3. Exchange it for an access token using the /oauth/token endpoint"
             )
@@ -160,14 +160,27 @@ class TickTickClient:
                 completed_time_str = task.get("completedTime")
                 if completed_time_str:
                     try:
-                        # Parse ISO format timestamp
-                        completed_time = datetime.fromisoformat(
-                            completed_time_str.replace('Z', '+00:00')
-                        )
+                        # Parse ISO format timestamp - handle both 'Z' and timezone formats
+                        if completed_time_str.endswith('Z'):
+                            completed_time_str = completed_time_str[:-1] + '+00:00'
+                        
+                        # Try parsing with fromisoformat
+                        try:
+                            completed_time = datetime.fromisoformat(completed_time_str)
+                        except ValueError:
+                            # Fallback: parse without microseconds
+                            completed_time_str = completed_time_str.split('.')[0] + '+00:00'
+                            completed_time = datetime.fromisoformat(completed_time_str)
+                        
+                        # Make from_date timezone-aware if it isn't
+                        if from_date.tzinfo is None:
+                            from datetime import timezone
+                            from_date = from_date.replace(tzinfo=timezone.utc)
+                        
                         if completed_time >= from_date:
                             filtered_tasks.append(task)
                     except (ValueError, AttributeError) as e:
-                        self.logger.warning(f"Failed to parse completedTime: {e}")
+                        self.logger.warning(f"Failed to parse completedTime '{completed_time_str}': {e}")
                         continue
             return filtered_tasks
         

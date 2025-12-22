@@ -146,7 +146,8 @@ def run_automation(client: TickTickClient, config: dict, state_file: str) -> dic
     
     try:
         # Get completed tasks from the last 24 hours
-        from_date = datetime.utcnow() - timedelta(days=1)
+        from datetime import timezone
+        from_date = datetime.now(timezone.utc) - timedelta(days=1)
         logger.info(f"Fetching tasks completed after: {from_date.isoformat()}")
         
         completed_tasks = client.get_completed_tasks(from_date=from_date)

@@ -65,9 +65,10 @@ def save_processed_tasks(state_file: str, task_ids: Set[str]):
         state_file: Path to state file
         task_ids: Set of processed task IDs
     """
+    from datetime import timezone
     state_data = {
         "processed_tasks": list(task_ids),
-        "last_updated": datetime.utcnow().isoformat()
+        "last_updated": datetime.now(timezone.utc).isoformat()
     }
     save_state(state_file, state_data)
 
