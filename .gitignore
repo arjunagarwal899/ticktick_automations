@@ -46,3 +46,4 @@ Thumbs.db
 # State files
 last_check_time.txt
 processed_tasks.json
+*_state.json

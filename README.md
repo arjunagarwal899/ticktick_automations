@@ -1,18 +1,34 @@
 # TickTick Automations
 
-Automate your TickTick tasks with powerful automation scripts. Currently supports automatic task duplication for recurring workflows.
+Automate your TickTick tasks with powerful automation scripts. This project provides a modular framework for creating custom TickTick automations.
 
-## Features
+## Project Structure
 
-### Task Duplication Automation
+```
+ticktick_automations/
+├── automations/              # Individual automation scripts
+│   └── duplicate_completed_tasks.py
+├── utils/                    # Shared utilities and API client
+│   ├── __init__.py
+│   ├── ticktick_api.py      # TickTick API client
+│   └── helpers.py           # Helper functions
+├── .github/workflows/        # GitHub Actions workflows
+├── .env.example             # Environment variable template
+└── README.md
+```
 
-Automatically duplicates completed tasks based on filters:
+## Available Automations
+
+### 1. Duplicate Completed Tasks
+
+Automatically duplicates tasks completed in the last 24 hours that match specified filters:
 - ✅ Filter by task name (substring match)
 - ✅ Filter by tags (any matching tag)
 - ✅ Duplicates task with same name, list, content, and checklist items
 - ✅ New task has no due date (as per design)
 - ✅ Tracks processed tasks to avoid duplicates
-- ✅ Can run via GitHub Actions (scheduled) or locally in tmux
+- ✅ Only processes tasks completed in the last 24 hours
+- ✅ Can run via GitHub Actions (scheduled) or locally
 
 ## Setup
 
@@ -20,16 +36,41 @@ Automatically duplicates completed tasks based on filters:
 
 - Python 3.8 or higher
 - TickTick account
-- TickTick Open API credentials
+- TickTick Open API credentials (Client ID and Client Secret)
 
 ### Getting TickTick API Credentials
 
 1. Go to [TickTick Developer Console](https://developer.ticktick.com/)
 2. Create a new application
-3. Get your Client ID and Client Secret
-4. Follow the OAuth flow to get an access token
-   - You'll need to implement OAuth authorization or use a tool like Postman
-   - The access token is what you'll use for this automation
+3. Note your **Client ID** and **Client Secret**
+
+### Getting an Access Token
+
+You need to complete the OAuth flow to get an access token:
+
+1. **Authorization Request**: Visit this URL in your browser (replace YOUR_CLIENT_ID and YOUR_REDIRECT_URI):
+   ```
+   https://ticktick.com/oauth/authorize?client_id=YOUR_CLIENT_ID&scope=tasks:read%20tasks:write&redirect_uri=YOUR_REDIRECT_URI&response_type=code
+   ```
+
+2. **Authorize the App**: You'll be asked to log in and authorize your application
+
+3. **Get the Code**: After authorization, you'll be redirected to your redirect URI with a code parameter:
+   ```
+   http://YOUR_REDIRECT_URI?code=AUTHORIZATION_CODE
+   ```
+
+4. **Exchange for Token**: Use curl or a tool like Postman to exchange the code for an access token:
+   ```bash
+   curl -X POST https://ticktick.com/oauth/token \
+     -d "client_id=YOUR_CLIENT_ID" \
+     -d "client_secret=YOUR_CLIENT_SECRET" \
+     -d "code=AUTHORIZATION_CODE" \
+     -d "grant_type=authorization_code" \
+     -d "redirect_uri=YOUR_REDIRECT_URI"
+   ```
+
+5. **Save the Access Token**: The response will contain an `access_token` - save this for your `.env` file
 
 ### Installation
 
@@ -51,41 +92,37 @@ cp .env.example .env
 
 4. Edit `.env` and add your credentials:
 ```env
+TICKTICK_CLIENT_ID=your_client_id_here
+TICKTICK_CLIENT_SECRET=your_client_secret_here
 TICKTICK_ACCESS_TOKEN=your_access_token_here
 TASK_FILTER_TAGS=recurring,daily
 TASK_NAME_FILTER=
-POLLING_INTERVAL=300
 ```
 
 ## Usage
 
 ### Running Locally
 
-#### Run Once
-Process completed tasks once and exit:
+#### Duplicate Completed Tasks Automation
+
+Run once:
 ```bash
-python main.py --once
+python automations/duplicate_completed_tasks.py --once
 ```
 
-#### Run Continuously (Polling Mode)
-Run continuously, checking for new completed tasks at regular intervals:
+With verbose logging:
 ```bash
-python main.py
-```
-
-With custom interval (in seconds):
-```bash
-python main.py --interval 600  # Check every 10 minutes
+python automations/duplicate_completed_tasks.py --once --verbose
 ```
 
 #### Run in tmux Session
-For long-running processes, use tmux:
+For long-running processes or to keep the script running:
 ```bash
 # Create a new tmux session
 tmux new -s ticktick
 
 # Inside tmux, run the automation
-python main.py
+python automations/duplicate_completed_tasks.py --once
 
 # Detach from tmux: Press Ctrl+B, then D
 # Reattach later: tmux attach -t ticktick
@@ -93,20 +130,27 @@ python main.py
 
 ### Running on GitHub Actions
 
-The automation can run automatically on GitHub Actions on a schedule.
+The automation can run automatically on GitHub Actions on a schedule (main branch only).
 
 #### Setup GitHub Actions
 
 1. Go to your repository Settings → Secrets and variables → Actions
 
-2. Add the following **Secret**:
+2. Add the following **Secrets**:
+   - `TICKTICK_CLIENT_ID`: Your TickTick client ID
+   - `TICKTICK_CLIENT_SECRET`: Your TickTick client secret
    - `TICKTICK_ACCESS_TOKEN`: Your TickTick access token
 
 3. Add the following **Variables** (optional):
    - `TASK_FILTER_TAGS`: Comma-separated tags (e.g., `recurring,daily`)
    - `TASK_NAME_FILTER`: Substring to filter task names
 
-4. The workflow is configured to run every 5 minutes. Edit `.github/workflows/automation.yml` to change the schedule:
+4. The workflow is configured to:
+   - Run every 5 minutes on the **main** branch only
+   - Can be triggered manually from the Actions tab
+   - All secrets are properly masked in logs
+
+5. Edit `.github/workflows/automation.yml` to change the schedule:
 ```yaml
 schedule:
   - cron: '*/5 * * * *'  # Every 5 minutes
@@ -114,20 +158,20 @@ schedule:
   # - cron: '0 0 * * *'  # Once a day at midnight
 ```
 
-5. You can also trigger the workflow manually from the Actions tab.
-
 ## Configuration
 
 ### Environment Variables
 
-- **TICKTICK_ACCESS_TOKEN** (required): OAuth access token for TickTick API
+- **TICKTICK_CLIENT_ID** (required): OAuth client ID from TickTick Developer Console
+- **TICKTICK_CLIENT_SECRET** (required): OAuth client secret from TickTick Developer Console
+- **TICKTICK_ACCESS_TOKEN** (required): OAuth access token obtained through OAuth flow
 - **TASK_FILTER_TAGS** (optional): Comma-separated list of tags. Tasks with ANY of these tags will be duplicated.
 - **TASK_NAME_FILTER** (optional): Substring to match in task names. Only matching tasks will be duplicated.
-- **POLLING_INTERVAL** (optional): Seconds between checks when running in polling mode. Default: 300 (5 minutes)
 
 ### Filters
 
 The automation will only duplicate tasks that match ALL configured filters:
+- Tasks must be completed in the last 24 hours
 - If `TASK_FILTER_TAGS` is set, task must have at least one of the specified tags
 - If `TASK_NAME_FILTER` is set, task name must contain the filter string (case-insensitive)
 - If both are set, both conditions must be met
@@ -154,7 +198,9 @@ TASK_NAME_FILTER=workout
 
 ## How It Works
 
-1. **Fetch Completed Tasks**: Queries TickTick API for all completed tasks
+### Duplicate Completed Tasks Automation
+
+1. **Fetch Recent Completed Tasks**: Queries TickTick API for tasks completed in the last 24 hours
 2. **Apply Filters**: Checks each task against name and tag filters
 3. **Check State**: Skips tasks that have already been processed
 4. **Duplicate Task**: Creates a new task with:
@@ -165,40 +211,75 @@ TASK_NAME_FILTER=workout
    - **No due date** (intentionally left empty)
 5. **Save State**: Records processed task IDs to avoid re-processing
 
+## Adding New Automations
+
+To add a new automation:
+
+1. Create a new file in the `automations/` directory (e.g., `automations/my_automation.py`)
+2. Import utilities from the `utils/` package:
+   ```python
+   from utils import TickTickClient, TickTickAPIError
+   ```
+3. Implement your automation logic
+4. Create a corresponding GitHub workflow in `.github/workflows/` if needed
+5. Update this README with documentation for your automation
+
 ## Files
 
-- `main.py`: Main entry point for the automation
-- `ticktick_client.py`: TickTick API client wrapper
-- `automation.py`: Core automation logic for task duplication
+### Core Files
+- `automations/duplicate_completed_tasks.py`: Main automation for duplicating completed tasks
+- `utils/ticktick_api.py`: TickTick API client wrapper with OAuth support
+- `utils/helpers.py`: Helper functions for state management and task operations
 - `requirements.txt`: Python dependencies
 - `.env.example`: Example environment configuration
-- `.github/workflows/automation.yml`: GitHub Actions workflow
-- `processed_tasks.json`: State file tracking processed tasks (auto-generated)
-- `ticktick_automation.log`: Log file (auto-generated)
+
+### GitHub Actions
+- `.github/workflows/automation.yml`: Workflow for duplicate completed tasks automation
+
+### Auto-generated Files
+- `duplicate_completed_tasks_state.json`: State file tracking processed tasks (auto-generated)
+- `duplicate_completed_tasks.log`: Log file (auto-generated)
 
 ## Troubleshooting
 
 ### Authentication Errors
-- Verify your access token is correct and not expired
-- TickTick access tokens may need to be refreshed periodically
+- Verify your client ID, client secret, and access token are correct
+- Access tokens may expire - obtain a new one through the OAuth flow if needed
+- Ensure you've granted the correct scopes: `tasks:read tasks:write`
 
 ### Tasks Not Being Duplicated
 - Check the filters in your `.env` file
-- Review `ticktick_automation.log` for details
-- Verify tasks are marked as completed in TickTick
-- Check `processed_tasks.json` - tasks listed here won't be processed again
+- Review the log file for details
+- Verify tasks were completed in the last 24 hours
+- Check the state file - tasks listed there won't be processed again
 
 ### GitHub Actions Not Running
-- Verify secrets and variables are set correctly in repository settings
+- Verify the workflow only runs on the main branch
+- Ensure secrets are set correctly in repository settings
 - Check workflow permissions in repository settings
 - Review workflow runs in the Actions tab for errors
+- Make sure you're on the main branch
+
+### Environment Variables Not Hidden
+- All sensitive values (CLIENT_ID, CLIENT_SECRET, ACCESS_TOKEN) are stored as GitHub Secrets
+- Secrets are automatically masked in workflow logs
+- Never commit `.env` file to the repository
+
+## Security Notes
+
+- Never commit your `.env` file or expose your credentials
+- Use GitHub Secrets for all sensitive values in workflows
+- Access tokens should be treated as passwords
+- Regularly rotate your access tokens for security
 
 ## Contributing
 
-Contributions are welcome! Feel free to:
-- Report bugs
-- Suggest new automation ideas
-- Submit pull requests
+Contributions are welcome! To add new automations:
+1. Create the automation script in `automations/`
+2. Use shared utilities from `utils/`
+3. Add documentation to this README
+4. Create a workflow file if needed
+5. Submit a pull request
 
 ## License
 
