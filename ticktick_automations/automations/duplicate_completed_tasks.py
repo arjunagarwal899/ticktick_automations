@@ -15,18 +15,19 @@ import logging
 import os
 import sys
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Set
+from typing import Dict, Optional
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
-from utils import (
-    TickTickClient,
+
+from ticktick_automations.utils import (
     TickTickAPIError,
+    TickTickClient,
+    create_duplicate_task,
     get_processed_tasks,
     save_processed_tasks,
-    create_duplicate_task
 )
 
 

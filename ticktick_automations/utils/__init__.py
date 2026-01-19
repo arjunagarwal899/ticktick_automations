@@ -1,13 +1,7 @@
 """Utils package for TickTick automations"""
 
-from .ticktick_api import TickTickClient, TickTickAPIError
-from .helpers import (
-    load_state,
-    save_state,
-    get_processed_tasks,
-    save_processed_tasks,
-    create_duplicate_task
-)
+from .helpers import create_duplicate_task, get_processed_tasks, load_state, save_processed_tasks, save_state
+from .ticktick_api import TickTickAPIError, TickTickClient
 
 __all__ = [
     'TickTickClient',
