@@ -1,6 +1,9 @@
 *temp
 temp*
 
+# resource paths
+ticktick/rsrc/01_pending_valid_tasks.json
+
 # Python
 __pycache__/
 *.py[cod]
