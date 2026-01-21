@@ -1,4 +1,5 @@
 import os
+import subprocess
 from typing import Any
 
 from dotenv import load_dotenv
@@ -86,10 +87,20 @@ def automation(pending_valid_tasks_path: str):
     logger.info(f"Saved {len(new_state)} tasks to {pending_valid_tasks_path}")
 
 
+def mac_alert(title, message):
+    script = f"""
+    display alert "{title}" message "{message}"
+    """
+    subprocess.run(["osascript", "-e", script])
+
+
 if __name__ == "__main__":
+    import atexit
     import time
 
     import schedule
+
+    atexit.register(mac_alert, "Ticktick", "Automation ending")
 
     pending_valid_tasks_path = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..", "rsrc", "01_pending_valid_tasks.json")
@@ -101,5 +112,8 @@ if __name__ == "__main__":
     automation(pending_valid_tasks_path)
 
     while True:
-        schedule.run_pending()
+        try:
+            schedule.run_pending()
+        except Exception as e:
+            mac_alert("Ticktick", f"Automation error: {e}")
         time.sleep(1)  # Sleep for a short interval to avoid high CPU usage
