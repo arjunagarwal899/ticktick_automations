@@ -106,12 +106,14 @@ if __name__ == "__main__":
         os.path.join(os.path.dirname(__file__), "..", "rsrc", "01_pending_valid_tasks.json")
     )
 
-    # Schedule the job
-    logger.info("Starting automation")
-    schedule.every().minute.do(automation, pending_valid_tasks_path)
-    automation(pending_valid_tasks_path)
-
     while True:
+        # Schedule the job if not scheduled till now
+        if not schedule.get_jobs():
+            logger.info("Starting automation")
+            mac_alert("Ticktick", "Automation (re)starting")
+            schedule.every().minute.do(automation, pending_valid_tasks_path)
+            automation(pending_valid_tasks_path)
+
         try:
             schedule.run_pending()
         except Exception as e:
