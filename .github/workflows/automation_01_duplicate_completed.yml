@@ -1,0 +1,117 @@
+name: automation-01-duplicate-completed-without-due-date
+
+on:
+  schedule:
+    - cron: "* * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: automation-01-duplicate-completed-without-due-date
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  run-automation:
+    runs-on: ubuntu-latest
+    env:
+      STATE_DIR: state
+      STATE_FILE: state/01_pending_valid_tasks.json
+      ARTIFACT_NAME: pending-valid-tasks-01
+      WORKFLOW_FILE: automation_01_duplicate_completed.yml
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Delete previous state artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const artifactName = process.env.ARTIFACT_NAME;
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner,
+              repo,
+              per_page: 100,
+            });
+            for (const artifact of artifacts.data.artifacts || []) {
+              if (artifact.name === artifactName) {
+                await github.rest.actions.deleteArtifact({
+                  owner,
+                  repo,
+                  artifact_id: artifact.id,
+                });
+              }
+            }
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Ensure state directory exists
+        run: mkdir -p "${STATE_DIR}"
+
+      - name: Find latest successful run
+        id: find_run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const workflow_id = process.env.WORKFLOW_FILE;
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id,
+              status: "success",
+              per_page: 1,
+            });
+            const run = runs.data.workflow_runs?.[0];
+            if (run) {
+              core.setOutput("run_id", String(run.id));
+            } else {
+              core.setOutput("run_id", "");
+            }
+
+      - name: Download previous state artifact
+        if: steps.find_run.outputs.run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.STATE_DIR }}
+          run-id: ${{ steps.find_run.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run automation once
+        env:
+          TICKTICK_CLIENT_ID: ${{ secrets.TICKTICK_CLIENT_ID }}
+          TICKTICK_CLIENT_SECRET: ${{ secrets.TICKTICK_CLIENT_SECRET }}
+          TICKTICK_ACCESS_TOKEN: ${{ secrets.TICKTICK_ACCESS_TOKEN }}
+        run: |
+          python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+
+          module_path = Path("ticktick/automations/01_duplicate_completed_without_due_date.py")
+          spec = importlib.util.spec_from_file_location("automation01", module_path)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+
+          state_path = Path("state/01_pending_valid_tasks.json").resolve()
+          module.automation(str(state_path))
+          PY
+
+      - name: Upload state artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.STATE_FILE }}
+          if-no-files-found: warn
+          retention-days: 1
