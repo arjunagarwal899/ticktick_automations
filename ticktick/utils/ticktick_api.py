@@ -129,13 +129,16 @@ class TickTickClient:
                 return {}
 
             return response.json()
+        except requests.exceptions.Timeout as e:
+            self.logger.error("API request timed out")
+            raise TickTickAPIError("API request timed out") from e
         except requests.exceptions.RequestException as e:
             self.logger.error(f"API request failed: {e}")
             if hasattr(e, "response") and e.response is not None:
                 self.logger.error(f"Response: {e.response.text}")
             raise TickTickAPIError(f"API request failed: {e}")
 
-    def get_projects(self) -> list[dict[str, Any]]:
+    def get_projects(self, **kwargs) -> list[dict[str, Any]]:
         """
         Get all projects/lists
 
@@ -143,10 +146,10 @@ class TickTickClient:
             list of project objects
         """
         endpoint = "/project"
-        response = self._make_request("GET", "v1", endpoint)
+        response = self._make_request("GET", "v1", endpoint, **kwargs)
         return response if isinstance(response, list) else []
 
-    def get_project_data(self, project_id: str) -> dict[str, Any]:
+    def get_project_data(self, project_id: str, **kwargs) -> dict[str, Any]:
         """
         Get detailed data of a specific project/list
 
@@ -157,10 +160,10 @@ class TickTickClient:
             Project data object
         """
         endpoint = f"/project/{project_id}/data"
-        response = self._make_request("GET", "v1", endpoint)
+        response = self._make_request("GET", "v1", endpoint, **kwargs)
         return response if isinstance(response, dict) else {}
 
-    def get_all_pending_tasks(self, project_id: str | None = None) -> list[dict[str, Any]]:
+    def get_all_pending_tasks(self, project_id: str | None = None, **kwargs) -> list[dict[str, Any]]:
         """
         Get list of all pending tasks
 
@@ -177,17 +180,17 @@ class TickTickClient:
 
         tasks = []
         for project_id in project_ids:
-            response = self.get_project_data(project_id)
+            response = self.get_project_data(project_id, **kwargs)
             tasks.extend(response.get("tasks", []))
         return tasks
 
-    def get_task(self, project_id: str, task_id) -> list[dict[str, Any]]:
+    def get_task(self, project_id: str, task_id, **kwargs) -> list[dict[str, Any]]:
         """Get details of a particular task"""
         endpoint = f"/project/{project_id}/task/{task_id}"
-        response = self._make_request("GET", "v1", endpoint)
+        response = self._make_request("GET", "v1", endpoint, **kwargs)
         return response if isinstance(response, dict) else {}
 
-    def create_task(self, task_data: dict[str, Any]) -> dict[str, Any]:
+    def create_task(self, task_data: dict[str, Any], **kwargs) -> dict[str, Any]:
         """
         Create a new task
 
@@ -198,4 +201,4 @@ class TickTickClient:
             Created task object
         """
         endpoint = "/task"
-        return self._make_request("POST", "v1", endpoint, json=task_data)
+        return self._make_request("POST", "v1", endpoint, json=task_data, **kwargs)

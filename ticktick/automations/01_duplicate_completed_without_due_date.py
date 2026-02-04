@@ -55,7 +55,7 @@ def automation(pending_valid_tasks_path: str):
 
     old_state = load_state(pending_valid_tasks_path)
     logger.info(f"Loaded {len(old_state)} tasks from {pending_valid_tasks_path}")
-    new_state = {task["id"]: task for task in client.get_all_pending_tasks()}
+    new_state = {task["id"]: task for task in client.get_all_pending_tasks(timeout=10)}
     logger.info(f"Found {len(new_state)} pending tasks")
 
     for task_id in set(old_state.keys()) - set(new_state.keys()):
@@ -63,7 +63,7 @@ def automation(pending_valid_tasks_path: str):
 
         # Update the task with the new state
         task = old_state[task_id]
-        task = client.get_task(task["projectId"], task["id"])
+        task = client.get_task(task["projectId"], task["id"], timeout=10)
 
         # Check if task was completed
         if task["status"] == 2:
@@ -72,7 +72,7 @@ def automation(pending_valid_tasks_path: str):
 
             # Duplicate the task
             new_task = duplicate_task_without_due_date(task)
-            new_task = client.create_task(new_task)
+            new_task = client.create_task(new_task, timeout=10)
 
             # Mark as processed
             new_state[new_task["id"]] = new_task
