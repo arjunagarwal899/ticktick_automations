@@ -1,5 +1,7 @@
 import os
 import subprocess
+import multiprocessing
+import queue
 from typing import Any
 
 from dotenv import load_dotenv
@@ -94,6 +96,46 @@ def mac_alert(title, message):
     subprocess.run(["osascript", "-e", script])
 
 
+def _automation_worker(pending_valid_tasks_path: str, result_queue: multiprocessing.Queue):
+    try:
+        automation(pending_valid_tasks_path)
+        result_queue.put(("ok", None))
+    except Exception as e:
+        result_queue.put(("error", repr(e)))
+
+
+def run_automation_with_timeout(pending_valid_tasks_path: str, timeout_seconds: int):
+    result_queue: multiprocessing.Queue = multiprocessing.Queue()
+    process = multiprocessing.Process(
+        target=_automation_worker, args=(pending_valid_tasks_path, result_queue)
+    )
+    process.start()
+    process.join(timeout_seconds)
+
+    if process.is_alive():
+        process.terminate()
+        process.join()
+        mac_alert("Ticktick", f"Automation timed out after {timeout_seconds}s")
+        return False
+
+    status = None
+    message = None
+    try:
+        status, message = result_queue.get_nowait()
+    except queue.Empty:
+        pass
+
+    if process.exitcode not in (0, None) and status is None:
+        mac_alert("Ticktick", "Automation exited unexpectedly")
+        return False
+
+    if status == "error":
+        mac_alert("Ticktick", f"Automation error: {message}")
+        return False
+
+    return True
+
+
 if __name__ == "__main__":
     import atexit
     import time
@@ -111,8 +153,9 @@ if __name__ == "__main__":
         if not schedule.get_jobs():
             logger.info("Starting automation")
             mac_alert("Ticktick", "Automation (re)starting")
-            schedule.every().minute.do(automation, pending_valid_tasks_path)
-            automation(pending_valid_tasks_path)
+            timeout_seconds = int(os.environ.get("TICKTICK_AUTOMATION_TIMEOUT_SECONDS", "60"))
+            schedule.every().minute.do(run_automation_with_timeout, pending_valid_tasks_path, timeout_seconds)
+            run_automation_with_timeout(pending_valid_tasks_path, timeout_seconds)
 
         try:
             schedule.run_pending()
