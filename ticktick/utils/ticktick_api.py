@@ -133,10 +133,22 @@ class TickTickClient:
             self.logger.error("API request timed out")
             raise TickTickAPIError("API request timed out") from e
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"API request failed: {e}")
+            status_code = None
+            response_text = ""
             if hasattr(e, "response") and e.response is not None:
-                self.logger.error(f"Response: {e.response.text}")
-            raise TickTickAPIError(f"API request failed: {e}")
+                status_code = e.response.status_code
+                response_text = e.response.text
+
+            self.logger.error(f"API request failed: {e}")
+            if response_text:
+                self.logger.error(f"Response: {response_text}")
+
+            error_parts = [f"{method} {url} failed"]
+            if status_code is not None:
+                error_parts.append(f"status={status_code}")
+            if response_text:
+                error_parts.append(f"body={response_text}")
+            raise TickTickAPIError(" | ".join(error_parts)) from e
 
     def get_projects(self, **kwargs) -> list[dict[str, Any]]:
         """
@@ -180,8 +192,13 @@ class TickTickClient:
 
         tasks = []
         for project_id in project_ids:
-            response = self.get_project_data(project_id, **kwargs)
-            tasks.extend(response.get("tasks", []))
+            try:
+                response = self.get_project_data(project_id, **kwargs)
+                tasks.extend(response.get("tasks", []))
+            except TickTickAPIError as e:
+                # TickTick occasionally returns 5xx for specific projects.
+                # Skipping a single broken project keeps automation alive.
+                self.logger.warning(f"Skipping project {project_id} due to API error: {e}")
         return tasks
 
     def get_task(self, project_id: str, task_id, **kwargs) -> list[dict[str, Any]]:
